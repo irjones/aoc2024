@@ -1,0 +1,13 @@
+{
+  "name": "day1",
+  "main": "solution.ts",
+  "author": "Ian Jones",
+  "scripts": {
+    "start": "ts-node solution.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
