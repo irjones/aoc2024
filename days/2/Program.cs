@@ -10,11 +10,17 @@ public class Solution
     public static void Main(string[] args)
     {
         string dataPath = args.Length > 0
-            ? args?[0] ?? "./data/TestData.txt"
+            ? args[0]
             : "./data/TestData.txt";
         Console.WriteLine("Day Two\n---");
-        new PartOneSolver(dataPath).Solve().Print();
-        new PartTwoSolver(dataPath).Solve().Print();
+        var dataLoader = new DayTwoDataLoader(dataPath);
+        new List<ISolver>
+        {
+            new PartOneSolver(dataLoader),
+            new PartTwoSolver(dataLoader)
+        }.Select(solver => solver.Solve())
+            .ToList()
+            .ForEach(solution => solution.Print());
     }
 }
 
@@ -51,9 +57,9 @@ public class PartOneSolver : ISolver
 {
     private readonly int[][] _data;
 
-    public PartOneSolver(string dataSource)
+    public PartOneSolver(DayTwoDataLoader loader)
     {
-        _data = new DayTwoDataLoader(dataSource).GetParsedData();
+        _data = loader.GetParsedData();
     }
 
     public DayTwoResult Solve()
@@ -92,9 +98,9 @@ public class PartTwoSolver : ISolver
 {
     private readonly int[][] _data;
 
-    public PartTwoSolver(string dataSource)
+    public PartTwoSolver(DayTwoDataLoader loader)
     {
-        _data = new DayTwoDataLoader(dataSource).GetParsedData();
+        _data = loader.GetParsedData();
     }
 
     public DayTwoResult Solve()
