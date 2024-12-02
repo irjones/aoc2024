@@ -5,6 +5,7 @@ https://adventofcode.com/2024
 ## Languages Used
 
 - TypeScript
+- C#
 
 ```
      /)/)/) /).-')
