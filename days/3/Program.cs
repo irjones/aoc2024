@@ -8,8 +8,7 @@ public static class Constants
 {
     public static readonly Regex PairRegex = new Regex("""\d+,\d+""");
     public static readonly Regex MulRegex = new Regex("""(mul\(\d+,\d+\))""");
-    public static readonly Regex DoRegex = new Regex("""do\(\)""");
-    public static readonly Regex DontRegex = new Regex("""don't\(\)""");
+    public static readonly Regex SymbolsRegex = new Regex("""(mul\(\d+,\d+\)|do\(\)|don't\(\))""");
     public static readonly string Do = "do()";
     public static readonly string Dont = "don't()";
 }
@@ -97,36 +96,7 @@ public class PartTwo : ISolver
 
     public Result Solve()
     {
-        var muls = new Queue<Match>(Constants.MulRegex.Matches(_data));
-        var dos = new Queue<Match>(Constants.DoRegex.Matches(_data));
-        var donts = new Queue<Match>(Constants.DontRegex.Matches(_data));
-
-        // merge matches into single list by index
-        Queue<Match> matchQueue = new Queue<Match>();
-        while (muls.Count > 0)
-        {
-            // find the lowest index, add that, iterate
-            muls.TryPeek(result: out Match? peekedMul);
-            dos.TryPeek(result: out Match? peekedDo);
-            donts.TryPeek(result: out Match? peekedDont);
-            int peekedMulIndex = peekedMul?.Index ?? Int32.MaxValue;
-            int peekedDoIndex = peekedDo?.Index ?? Int32.MaxValue;
-            int peekedDontIndex = peekedDont?.Index ?? Int32.MaxValue;
-
-            bool isMulLowest = peekedMulIndex < peekedDoIndex && peekedMulIndex < peekedDontIndex;
-            bool isDoLowest = peekedDoIndex < peekedMulIndex && peekedDoIndex < peekedDontIndex;
-
-            Queue<Match> queueToUse = isMulLowest
-                ? muls
-                : isDoLowest
-                    ? dos
-                    : donts;
-
-            if (queueToUse.TryDequeue(out Match? next))
-            {
-                matchQueue.Enqueue(next);
-            }
-        }
+        var matchQueue = new Queue<Match>(Constants.SymbolsRegex.Matches(_data));
 
         int product = 0;
         // at the beginning, instructions are enabled
