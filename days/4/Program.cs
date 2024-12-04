@@ -53,10 +53,10 @@ public class DataLoader
     }
 }
 
-public class PartOneResult : IResult
+public class IntResult : IResult
 {
     private readonly int _value;
-    public PartOneResult(int value)
+    public IntResult(int value)
     {
         _value = value;
     }
@@ -77,7 +77,7 @@ public class PartOneSolver : ISolver
     public IResult Solve()
     {
         CardinalCharGraph graph = new CardinalCharGraph(_data);
-        return new PartOneResult(graph.CountXmasInGraph());
+        return new IntResult(graph.CountXmasInGraph());
     }
 }
 
@@ -92,7 +92,7 @@ public class PartTwoSolver : ISolver
     public IResult Solve()
     {
         CardinalCharGraph graph = new CardinalCharGraph(_data);
-        return new PartOneResult(graph.CountMasXsInGraph());
+        return new IntResult(graph.CountMasXsInGraph());
     }
 }
 
