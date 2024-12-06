@@ -36,8 +36,7 @@ class InputLoader(private val location: String) {
     }
 }
 
-class PatrolMap(spec: List<CharArray>) {
-    private lateinit var startSquare: MapSquare
+class PatrolMap(private val spec: List<CharArray>) {
     private val endSquare = MapSquare(
         isObstacle = false,
         coordinate = Coordinate(-1, -1),
@@ -49,7 +48,9 @@ class PatrolMap(spec: List<CharArray>) {
     )
 
     data class Coordinate(val x: Int, val y: Int)
-    init {
+    data class MappedSpec(val squares: List<List<MapSquare>>, val startSquare: MapSquare)
+    private fun specToSquares(spec: List<CharArray>): MappedSpec {
+        var startSquare: MapSquare = endSquare
         val squarifiedSpec = spec.mapIndexed { y, row ->
             row.mapIndexed { x, square ->
                 val sq = MapSquare(
@@ -66,6 +67,8 @@ class PatrolMap(spec: List<CharArray>) {
             }
         }
 
+        assert(startSquare.coordinate != endSquare.coordinate) { "Never found a starting square, which is wild." }
+
         for ((y, row) in squarifiedSpec.withIndex()) {
             for ((x, square) in row.withIndex()) {
                 val isNorthEdge = y == 0
@@ -79,12 +82,19 @@ class PatrolMap(spec: List<CharArray>) {
                 if (!isWestEdge) square.west = Optional.of(squarifiedSpec[y][x - 1])
             }
         }
+
+        return MappedSpec(squarifiedSpec, startSquare)
+    }
+
+    init {
+
     }
 
     data class Movement(val square: MapSquare, val initialHeading: Cardinal, val finalHeading: Cardinal, val turnsCount: Int)
     data class TravelLog(val path: List<Movement>, val visitedCount: Int)
 
     fun completePatrol(): TravelLog {
+        val (_, startSquare) = specToSquares(spec)
         val pathTaken = mutableListOf<Movement>()
         var visitedCount = 0
         var currentHeading = Cardinal.North
@@ -114,41 +124,29 @@ class PatrolMap(spec: List<CharArray>) {
     }
 
     fun computeAddedCycles(): Int {
-        var possibleCycles = 0
-        val (path) = completePatrol()
-
-        // hit a visited node? does going right bring you back here? That's a loop!
-        for ((index, movement) in path.withIndex()) {
-            val seen = mutableSetOf<Pair<Cardinal, Coordinate>>();
-            println("Progress: ${index + 1}/${path.size}\nDetected Cycles:${possibleCycles}\r")
-            // follow the righthand to see if you get back here
-            var currentHeading = turnRight(movement.initialHeading)
-            var currentSquare = movement.square
-            while (currentSquare.coordinate != endSquare.coordinate) {
-                if (seen.contains(Pair(currentHeading, currentSquare.coordinate))) {
-                    // we are travelling the same route, it's a loop
-                    println("We seem to have found an inner loop, closed at ${currentHeading}bound ${currentSquare.coordinate}")
-                    println("Progress: ${index + 1}/${path.size}\nDetected Cycles:${possibleCycles}\r")
-                    possibleCycles += 1
-                    break;
-                }
-                var nextSquare = currentSquare.get(currentHeading)
-                // obstacle case
-                while (nextSquare.isObstacle) {
-                    currentHeading = turnRight(currentHeading)
-                    nextSquare = currentSquare.get(currentHeading)
-                }
-                seen.add(Pair(currentHeading, currentSquare.coordinate))
-                currentSquare = nextSquare
-                if (currentSquare.coordinate == movement.square.coordinate) {
-                    // we found a loop
-                    possibleCycles += 1
-                    println("Progress: ${index + 1}/${path.size}\nDetected Cycles:${possibleCycles}\r")
-                    break
+        var cycles = 0;
+        for (y in spec.indices)
+            for (x in spec[y].indices) {
+                // make a new one, try to traverse it, at 10_000 steps it's a loop, ok?
+                val specCopy = spec.map { it.copyOf() }
+                if(specCopy[y][x] != '^' && specCopy[y][x] != '#') specCopy[y][x] = '#'
+                val (_, startSquare) = specToSquares(specCopy)
+                var stepsTaken = 0
+                var currentSquare = startSquare
+                var currentHeading = Cardinal.North
+                while (currentSquare.coordinate != endSquare.coordinate) {
+                    val (updatedHeading, updatedSquare) = currentSquare.step(currentHeading)
+                    currentHeading = updatedHeading
+                    currentSquare = updatedSquare
+                    stepsTaken += 1
+                    // assumption: taking over 10,000 steps is a loop
+                    if (stepsTaken > 100_000) {
+                        cycles += 1
+                        break;
+                    }
                 }
             }
-        }
-        return possibleCycles
+        return cycles
     }
 
     data class MapSquare(
@@ -167,6 +165,16 @@ class PatrolMap(spec: List<CharArray>) {
                 Cardinal.South -> south.orElseThrow()
                 Cardinal.West -> west.orElseThrow()
             }
+        }
+
+        fun step(heading: Cardinal): Pair<Cardinal, MapSquare> {
+            var next = get(heading)
+            var currentHeading = heading
+            while (next.isObstacle) {
+                currentHeading = turnRight(currentHeading)
+                next = get(currentHeading)
+            }
+            return Pair(currentHeading, next)
         }
     }
 
