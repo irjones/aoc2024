@@ -2,13 +2,12 @@ package dev.ianjones.aoc.daysix
 
 import java.io.File
 import java.util.Optional
-import java.util.stream.Collectors
 
 fun main(args: Array<String>) {
     val inputLocation = if (args.isNotEmpty()) {
         args[0]
     } else {
-        "./app/data/input.txt"
+        "./data/input.txt"
     }
     println(DaySix(InputLoader(inputLocation)))
 }
