@@ -4,8 +4,9 @@ https://adventofcode.com/2024
 
 ## Languages Used
 
-- TypeScript
 - C#
+- TypeScript/JavaScript
+- Kotlin
 
 ```
      /)/)/) /).-')
