@@ -2,7 +2,7 @@ package dev.ianjones.aoc.daysix
 
 import java.io.File
 import java.util.Optional
-import kotlin.system.exitProcess
+import java.util.stream.Collectors
 
 fun main(args: Array<String>) {
     val inputLocation = if (args.isNotEmpty()) {
@@ -17,7 +17,7 @@ class DaySix(loader: InputLoader) {
     private val data = loader.load()
 
     fun partOne(): Int {
-        return PatrolMap(data).completePatrol().visitedCount
+        return PatrolMap(data).completePatrol()
     }
 
     fun partTwo(): Int {
@@ -47,8 +47,6 @@ class PatrolMap(private val spec: List<CharArray>) {
         isVisited = false,
     )
 
-    data class Coordinate(val x: Int, val y: Int)
-    data class MappedSpec(val squares: List<List<MapSquare>>, val startSquare: MapSquare)
     private fun specToSquares(spec: List<CharArray>): MappedSpec {
         var startSquare: MapSquare = endSquare
         val squarifiedSpec = spec.mapIndexed { y, row ->
@@ -86,16 +84,8 @@ class PatrolMap(private val spec: List<CharArray>) {
         return MappedSpec(squarifiedSpec, startSquare)
     }
 
-    init {
-
-    }
-
-    data class Movement(val square: MapSquare, val initialHeading: Cardinal, val finalHeading: Cardinal, val turnsCount: Int)
-    data class TravelLog(val path: List<Movement>, val visitedCount: Int)
-
-    fun completePatrol(): TravelLog {
+    fun completePatrol(): Int {
         val (_, startSquare) = specToSquares(spec)
-        val pathTaken = mutableListOf<Movement>()
         var visitedCount = 0
         var currentHeading = Cardinal.North
         var currentSquare = startSquare
@@ -115,38 +105,42 @@ class PatrolMap(private val spec: List<CharArray>) {
                 turnsCount += 1
                 nextSquare = currentSquare.get(currentHeading)
             }
-            pathTaken.add(Movement(square = currentSquare, initialHeading, finalHeading = currentHeading, turnsCount))
             // traversal case
             currentSquare = nextSquare
 
         }
-        return TravelLog(pathTaken, visitedCount)
+        return visitedCount
     }
 
     fun computeAddedCycles(): Int {
-        var cycles = 0;
-        for (y in spec.indices)
+        val possibleMaps = mutableListOf<List<CharArray>>()
+        for (y in spec.indices) {
             for (x in spec[y].indices) {
                 // make a new one, try to traverse it, at 10_000 steps it's a loop, ok?
                 val specCopy = spec.map { it.copyOf() }
                 if(specCopy[y][x] != '^' && specCopy[y][x] != '#') specCopy[y][x] = '#'
-                val (_, startSquare) = specToSquares(specCopy)
-                var stepsTaken = 0
-                var currentSquare = startSquare
-                var currentHeading = Cardinal.North
-                while (currentSquare.coordinate != endSquare.coordinate) {
-                    val (updatedHeading, updatedSquare) = currentSquare.step(currentHeading)
-                    currentHeading = updatedHeading
-                    currentSquare = updatedSquare
-                    stepsTaken += 1
-                    // assumption: taking over 10,000 steps is a loop
-                    if (stepsTaken > 100_000) {
-                        cycles += 1
-                        break;
-                    }
+                possibleMaps.add(specCopy)
+            }
+        }
+
+        return possibleMaps.parallelStream().map { possibleSpec ->
+            val (_, startSquare) = specToSquares(possibleSpec)
+            var stepsTaken = 0
+            var currentSquare = startSquare
+            var currentHeading = Cardinal.North
+            while (currentSquare.coordinate != endSquare.coordinate) {
+                val (updatedHeading, updatedSquare) = currentSquare.step(currentHeading)
+                currentHeading = updatedHeading
+                currentSquare = updatedSquare
+                stepsTaken += 1
+                // Quite likely naive assumption: taking over 100,000 steps is a loop. Not efficient, but it works
+                if (stepsTaken > 100_000) {
+                    return@map 1
                 }
             }
-        return cycles
+            return@map 0
+        }.reduce { acc, next -> acc + next }
+            .orElseThrow()
     }
 
     data class MapSquare(
@@ -178,21 +172,23 @@ class PatrolMap(private val spec: List<CharArray>) {
         }
     }
 
+    data class Coordinate(val x: Int, val y: Int)
+    data class MappedSpec(val squares: List<List<MapSquare>>, val startSquare: MapSquare)
+    enum class Cardinal {
+        North,
+        South,
+        East,
+        West
+    }
 
-}
-
-enum class Cardinal {
-    North,
-    South,
-    East,
-    West
-}
-
-fun turnRight(heading: Cardinal): Cardinal {
-    return when (heading) {
-        Cardinal.North -> Cardinal.East
-        Cardinal.East -> Cardinal.South
-        Cardinal.South -> Cardinal.West
-        Cardinal.West -> Cardinal.North
+    companion object {
+        private fun turnRight(heading: Cardinal): Cardinal {
+            return when (heading) {
+                Cardinal.North -> Cardinal.East
+                Cardinal.East -> Cardinal.South
+                Cardinal.South -> Cardinal.West
+                Cardinal.West -> Cardinal.North
+            }
+        }
     }
 }
