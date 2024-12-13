@@ -1,5 +1,7 @@
 ﻿namespace DayTwelve;
 
+// NOTE TO THE READER:
+// I'm not terribly proud of the efficiency or readability of this code, but it works and I got the right answer.
 public class DayTwelve
 {
     public static void Main(string[] args)
@@ -41,6 +43,7 @@ public class Input(string path)
 
 public class Garden(char[][] layout)
 {
+    private static readonly Dictionary<char, List<Plot>> PlotsByChar = new();
     private readonly Plot[][] _plotGrid = LinkGrid(layout.Select(row => row.Select(cell => new Plot(cell)).ToArray()).ToArray());
 
     private static Plot[][] LinkGrid(Plot[][] plotGrid)
@@ -53,10 +56,18 @@ public class Garden(char[][] layout)
                 Plot current = plotGrid[y][x];
                 current.X = x;
                 current.Y = y;
-                current.North ??= current.GetPlotOrAddFence(plotGrid, x, y - 1);
-                current.East ??= current.GetPlotOrAddFence(plotGrid, x + 1, y);
-                current.South ??= current.GetPlotOrAddFence(plotGrid, x, y + 1);
-                current.West ??= current.GetPlotOrAddFence(plotGrid, x - 1, y);
+                current.North = current.GetPlotOrAddFence(plotGrid, x, y - 1, p => p.South = current);
+                current.East = current.GetPlotOrAddFence(plotGrid, x + 1, y, p => p.West = current);
+                current.South = current.GetPlotOrAddFence(plotGrid, x, y + 1, p => p.North = current);
+                current.West = current.GetPlotOrAddFence(plotGrid, x - 1, y, p => p.East = current);
+                if (PlotsByChar.TryGetValue(current.Value, out List<Plot>? plotList))
+                {
+                    PlotsByChar[current.Value] = plotList.Concat([current]).ToList();
+                } else
+                {
+                    PlotsByChar[current.Value] = [current];
+                }
+
             }
         }
         return plotGrid;
@@ -64,9 +75,6 @@ public class Garden(char[][] layout)
 
     public int Fence()
     {
-
-        // group regions
-        // iterate through via index, checking visited plots
         List<HashSet<Plot>> regions = new();
         for (int y = 0; y < _plotGrid.Length; y += 1)
         {
@@ -86,7 +94,6 @@ public class Garden(char[][] layout)
             var fullRegion = region.First().GetRegion();
             var fences = fullRegion.Where(p => p.Value == Plot.Fence).ToArray();
             var plants = fullRegion.Where(p => p.Value != Plot.Fence).ToArray();
-            //Console.WriteLine($"A region of {plants.Length} {plants.First().Value} plants with {fences.Length} fences");
             costs.Add(fences.Length * plants.Length);
         }
 
@@ -95,74 +102,35 @@ public class Garden(char[][] layout)
 
     public int BulkFence()
     {
-        // link the fences
-        Dictionary<Tuple<int, int>, Plot> fencePlots = new();
-        List<HashSet<Plot>> regions = new();
-        for (int y = 0; y < _plotGrid.Length; y += 1)
-        {
-            for (int x = 0; x < _plotGrid.Length; x += 1)
-            {
-                Plot current = _plotGrid[y][x];
-                if (!regions.Any(region => region.Contains(current)))
-                {
-                    regions.Add(current.GetRegion().ToHashSet());
-                }
-            }
-        }
-
-        // connect all the fences with their adjacent neighbor fences
-        foreach (HashSet<Plot> region in regions)
-        {
-            var fences = region.First().GetRegion().Where(p => p.Value == Plot.Fence).ToList();
-            LinkFences(fences);
-        }
-
         int cost = 0;
-        // now that the fences are joined into subregions, count the fence subregions
-        foreach (HashSet<Plot> region in regions)
+        foreach (List<Plot> nation in PlotsByChar.Values)
         {
-            HashSet<Plot> seenFences = new();
-            var nonFences = region.First().GetRegion().Where(p => p.Value != Plot.Fence).ToList();
-            var fences = region.First().GetRegion().Where(p => p.Value == Plot.Fence).ToList();
-            List<List<Plot>> sides = new();
-            foreach (var fence in fences)
+            // need to split them out into their locales
+            HashSet<Plot> seenPlots = new();
+            List<List<Plot>> regions = new();
+            foreach (var plot in nation)
             {
-                if (!seenFences.Contains(fence))
-                {
-                    var parts = fence.GetAdjacentFencesIfThisIsFence();
-                    parts.ForEach(f => seenFences.Add(f));
-                    sides.Add(parts);
-                }
+                if (seenPlots.Contains(plot)) continue;
+                var region = plot.GetRegion();
+                region.ForEach(p => seenPlots.Add(p));
+                regions.Add(region);
             }
-            cost += sides.Count * nonFences.Count;
+            foreach (var region in regions)
+            {
+                int sides = 0;
+                var nonFencePlots = region.Where(p => p.Value != Plot.Fence).ToArray();
+                foreach (Plot plot in nonFencePlots)
+                {
+                    int plotSides = plot.CountCorners();
+                    sides += plotSides;
+                }
+                cost += sides * nonFencePlots.Length;
+            }
         }
         return cost;
     }
 
-    private void PrintRegion(HashSet<Plot> region)
-    {
-        List<List<char>> printable = new();
-        for (int y = 0; y < _plotGrid.Length; y += 1)
-        {
-            List<char> row = new();
-            for (int x = 0; x < _plotGrid[0].Length; x += 1)
-            {
-                row.Add('.');
-            }
-            printable.Add(row);
-        }
-
-        region.First().GetRegion().Where(p => p.Value != Plot.Fence).ToList().ForEach(p =>
-        {
-            printable[p.Y][p.X] = p.Value;
-        });
-        foreach(var line in printable)
-        {
-            Console.WriteLine(line.Aggregate("", (acc, next) => $"{acc}{next}"));
-        }
-    }
-
-    // Plots can be plants OR fences
+    // Plots can contain plants OR fences
     protected class Plot(char value)
     {
         public readonly char Value = value;
@@ -186,6 +154,36 @@ public class Garden(char[][] layout)
 
         public const char Fence = '|';
 
+        public int CountCorners()
+        {
+            int count = 0;
+            bool northIsFence = North is { Value: Fence };
+            bool southIsFence = South is { Value: Fence };
+            bool westIsFence = West is { Value: Fence };
+            bool eastIsFence = East is { Value: Fence };
+
+            // no corners
+            if (((northIsFence && southIsFence) && (!westIsFence && !eastIsFence))
+                || (westIsFence && eastIsFence) && (!northIsFence && !southIsFence))
+            {
+                return 0;
+            }
+
+            // outside corners
+            if (northIsFence && eastIsFence) count += 1;
+            if (eastIsFence && southIsFence) count += 1;
+            if (southIsFence && westIsFence) count += 1;
+            if (northIsFence && westIsFence) count += 1;
+
+            // inner corners
+            if (!northIsFence && !eastIsFence && North is { East.Value: Fence }) count += 1;
+            if (!northIsFence && !westIsFence && North is { West.Value: Fence }) count += 1;
+            if (!southIsFence && !eastIsFence && South is { East.Value: Fence }) count += 1;
+            if (!southIsFence && !westIsFence && South is { West.Value: Fence }) count += 1;
+
+            return count;
+        }
+
         public List<Plot> GetRegion()
         {
             List<Plot> neighbors = new();
@@ -205,31 +203,7 @@ public class Garden(char[][] layout)
             return neighbors;
         }
 
-        public List<Plot> GetAdjacentFencesIfThisIsFence()
-        {
-            if (Value != Plot.Fence) return [];
-            List<Plot> fence = new();
-            HashSet<Plot> visited = new();
-            Queue<Plot> next = new();
-            next.Enqueue(this);
-            while (next.Count > 0)
-            {
-                Plot current = next.Dequeue();
-                if (!visited.Add(current)) continue;
-                fence.Add(current);
-                if (current.East is { Value: Fence })
-                    next.Enqueue(current.East);
-                if (current.West is { Value: Fence })
-                    next.Enqueue(current.West);
-                if (current.South is { Value: Fence })
-                    next.Enqueue(current.South);
-                if (current.West is { Value: Fence })
-                    next.Enqueue(current.West);
-            }
-            return fence;
-        }
-
-        public Plot GetPlotOrAddFence(Plot[][] garden, int x, int y)
+        public Plot GetPlotOrAddFence(Plot[][] garden, int x, int y, Action<Plot> callback)
         {
             try
             {
@@ -239,87 +213,23 @@ public class Garden(char[][] layout)
                     return other;
                 }
                 // set the coords of the fence to the originator
-                return new Plot(Fence)
+                Plot p = new Plot(Fence)
                 {
-                    X = y,
-                    Y = x
+                    X = x,
+                    Y = y
                 };
+                callback(p);
+                return p;
             }
             catch (IndexOutOfRangeException)
             {
-                return new Plot('|') {
+                Plot p = new Plot(Fence)
+                {
                     X = x,
                     Y = y
-                };;
-            }
-        }
-
-        public override string ToString()
-        {
-            return $"{Value} - ({X},{Y}) - n: {North?.Value ?? '_'}, e: {East?.Value ?? '_'}, s: {South?.Value ?? '_'}, w: {West?.Value ?? '_'}";
-        }
-    }
-
-    protected void LinkFences(IEnumerable<Plot> fences)
-    {
-        foreach (Plot fence in fences)
-        {
-            Plot originator = _plotGrid[fence.Y][fence.X];
-            if (originator.North?.Equals(fence) ?? false)
-            {
-                fence.South ??= originator;
-                if (originator.East is { North.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.East ??= originator.East.North;
-                    originator.East.North.West ??= fence;
-                }
-                if (originator.West is { North.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.West ??= originator.West.North;
-                    originator.West.North.East ??= fence;
-                }
-            }
-            if (originator.South?.Equals(fence) ?? false)
-            {
-                fence.North ??= originator;
-                if (originator.East is { South.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.East ??= originator.East.South;
-                    originator.East.South.West ??= fence;
-                }
-                if (originator.West is { South.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.West ??= originator.West.South;
-                    originator.West.South.East ??= fence;
-                }
-            }
-            if (originator.East?.Equals(fence) ?? false)
-            {
-                fence.West ??= originator;
-                if (originator.North is { East.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.North ??= originator.North.East;
-                    originator.North.East.South ??= fence;
-                }
-                if (originator.South is { East.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.South ??= originator.South.East;
-                    originator.South.East.North ??= fence;
-                }
-            }
-            if (originator.West?.Equals(fence) ?? false)
-            {
-                fence.East ??= originator;
-                if (originator.North is { West.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.North ??= originator.North.West;
-                    originator.North.West.South ??= fence;
-                }
-                if (originator.South is { West.Value: Plot.Fence } and not { Value: Plot.Fence })
-                {
-                    fence.South ??= originator.South.West;
-                    originator.South.West.North ??= fence;
-                }
+                };
+                callback(p);
+                return p;
             }
         }
     }
